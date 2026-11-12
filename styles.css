@@ -38,6 +38,16 @@ input[type=range] { display: block; width: 100%; margin: 8px 0 18px; accent-colo
 .components { display: flex; justify-content: space-between; gap: 4px; font-size: 10px; }
 .components label { display: flex; align-items: center; gap: 3px; cursor: pointer; }
 .components input { margin: 0; accent-color: #286c7e; }
+.section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
+.section-heading span { color: #78909e; font-size: 9px; }
+.texture-maps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.texture-maps label { min-width: 0; font-size: 10px; color: #37596c; cursor: pointer; }
+.texture-maps img { display: block; width: 100%; aspect-ratio: 1; border: 1px solid #d5e0e5; border-radius: 6px; margin-bottom: 8px; }
+.texture-maps span { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.texture-maps input { margin: 0; accent-color: #286c7e; }
+.material-caption { color: #78909e; font-size: 10px; margin: 13px 0 19px; }
+.repeat-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.repeat-controls input { margin-bottom: 0; }
 details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #37596c; }
 details[open] summary { margin-bottom: 16px; }
 .viewer { min-width: 0; border-radius: 12px; overflow: hidden; border: 1px solid #233e51; background: #0e2131; color: #e2edf3; display: flex; flex-direction: column; }
@@ -51,6 +61,7 @@ canvas:active { cursor: grabbing; }
 .stats { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid #23394a; background: #112738; }
 .stats div { padding: 17px 22px; border-right: 1px solid #23394a; }
 .stats div:last-child { border: 0; }.stats span { display: block; font-size: 9px; color: #7f9aaa; }.stats strong { font-weight: 500; font-size: 21px; display: block; margin-top: 7px; }
+.stats div:last-child strong { font-size: 17px; margin-top: 10px; }
 .formulas { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 20px; padding: 18px 22px; border-radius: 8px; background: #e6edef; }
 .formula-label { font-size: 9px; font-weight: 700; color: #6f8995; letter-spacing: 1px; }.formulas code { font-size: 11px; color: #3d6273; }
 @media (min-width:1600px) { body { max-width: 1600px; margin: auto; }.canvas-wrap { min-height: 510px; } }

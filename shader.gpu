@@ -1,20 +1,25 @@
-// PA2: позиції та нормалі у системі координат спостерігача.
+// PA3: позиція, нормаль PA2, дотична Pu та UV.
 const vertexShaderSource = `
 attribute vec3 vertex;
 attribute vec3 normal;
+attribute vec3 tangent;
+attribute vec2 texCoord;
 uniform mat4 ModelViewProjectionMatrix;
 uniform mat4 ModelViewMatrix;
 uniform mat3 NormalMatrix;
 varying vec3 positionEye;
 varying vec3 normalEye;
+varying vec3 tangentEye;
+varying vec2 uv;
 void main() {
     positionEye = (ModelViewMatrix * vec4(vertex, 1.0)).xyz;
     normalEye = NormalMatrix * normal;
+    tangentEye = mat3(ModelViewMatrix) * tangent;
+    uv = texCoord;
     gl_Position = ModelViewProjectionMatrix * vec4(vertex, 1.0);
     gl_PointSize = 11.0;
 }`;
 
-// Phong: освітлення обчислюється для кожного фрагмента.
 const fragmentShaderSource = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -26,27 +31,54 @@ uniform bool Lighting;
 uniform vec3 LightPositionEye;
 uniform vec3 Components;
 uniform float Shininess;
+uniform sampler2D DiffuseMap;
+uniform sampler2D SpecularMap;
+uniform sampler2D NormalMap;
+uniform vec3 UseTextures;
+uniform vec2 TextureRepeat;
+uniform float NormalStrength;
+uniform int DisplayMode;
 varying vec3 positionEye;
 varying vec3 normalEye;
+varying vec3 tangentEye;
+varying vec2 uv;
 void main() {
-    if (!Lighting) {
-        gl_FragColor = color;
-        return;
+    if (!Lighting) { gl_FragColor = color; return; }
+    vec2 st = uv * TextureRepeat;
+    vec3 diffuseTexel = texture2D(DiffuseMap, st).rgb;
+    vec3 specularTexel = texture2D(SpecularMap, st).rgb;
+    vec3 normalTexel = texture2D(NormalMap, st).rgb;
+    if (DisplayMode == 1) { gl_FragColor = vec4(diffuseTexel, 1.0); return; }
+    if (DisplayMode == 2) { gl_FragColor = vec4(specularTexel, 1.0); return; }
+    if (DisplayMode == 3) { gl_FragColor = vec4(normalTexel, 1.0); return; }
+
+    // Варіант 13: Gram–Schmidt з ПРІОРИТЕТОМ ДОТИЧНОЇ.
+    // Виконуємо після інтерполяції для кожного фрагмента.
+    vec3 T = normalize(tangentEye);
+    vec3 perpendicular = normalEye - T * dot(normalEye, T);
+    if (dot(perpendicular, perpendicular) < 1.0e-10) {
+        vec3 axis = abs(T.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+        perpendicular = axis - T * dot(axis, T);
     }
-    vec3 N = normalize(normalEye);
-    // Відкрита тонка поверхня освітлюється з обох боків.
-    if (!gl_FrontFacing) N = -N;
+    vec3 N = normalize(perpendicular);
+    vec3 B = normalize(cross(N, T));
+    // Pu × Pv задає +N, +B спрямовано вздовж +v.
+    if (UseTextures.z > 0.5 && NormalStrength > 0.0) {
+        vec3 mapNormal = normalTexel * 2.0 - 1.0;
+        mapNormal.xy *= NormalStrength;
+        N = normalize(mat3(T, B, N) * normalize(mapNormal));
+    }
+    if (!gl_FrontFacing) N = -N; // Двобічний матеріал відкритої поверхні.
     vec3 L = normalize(LightPositionEye - positionEye);
-    // Ортографічна камера: напрямок до спостерігача сталий.
-    vec3 V = vec3(0.0, 0.0, 1.0);
+    vec3 V = vec3(0.0, 0.0, 1.0); // Ортографічна камера PA2.
     float diffuseFactor = max(dot(N, L), 0.0);
     float specularFactor = 0.0;
-    if (diffuseFactor > 0.0) {
-        vec3 R = reflect(-L, N);
-        specularFactor = pow(max(dot(R, V), 0.0), Shininess);
-    }
-    vec3 ambient = 0.16 * color.rgb * Components.x;
-    vec3 diffuse = 0.76 * color.rgb * diffuseFactor * Components.y;
-    vec3 specular = 0.85 * vec3(1.0, 0.94, 0.82) * specularFactor * Components.z;
+    if (diffuseFactor > 0.0)
+        specularFactor = pow(max(dot(reflect(-L, N), V), 0.0), Shininess);
+    vec3 kd = UseTextures.x > 0.5 ? diffuseTexel : color.rgb;
+    vec3 ks = UseTextures.y > 0.5 ? specularTexel : vec3(1.0);
+    vec3 ambient = 0.20 * color.rgb * Components.x;
+    vec3 diffuse = 0.88 * kd * diffuseFactor * Components.y;
+    vec3 specular = 0.85 * ks * vec3(1.0, 0.94, 0.82) * specularFactor * Components.z;
     gl_FragColor = vec4(ambient + diffuse + specular, color.a);
 }`;

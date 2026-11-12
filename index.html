@@ -3,25 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PA2 · Варіант 13 · Phong Lighting</title>
+  <title>PA3 · Варіант 13 · Texturing</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="styles.css">
   <script defer src="Utils/m4.js"></script>
   <script defer src="Utils/trackball-rotator.js"></script>
   <script defer src="shader.gpu"></script>
   <script defer src="Model.js"></script>
+  <script defer src="TextureData.js"></script>
   <script defer src="main.js"></script>
 </head>
 <body>
   <header class="header">
-    <div><p class="eyebrow">КОМП’ЮТЕРНА ГРАФІКА / ПРАКТИЧНА РОБОТА 02</p>
+    <div><p class="eyebrow">КОМП’ЮТЕРНА ГРАФІКА / ПРАКТИЧНА РОБОТА 03</p>
       <h1>Ruled Rotor Cylinder<span>Варіант 13</span></h1>
-      <p class="subtitle">Phong shading · Нормалі з вагами площ граней · Точкове джерело світла</p>
+      <p class="subtitle">Diffuse + Specular + Normal mapping · Gram–Schmidt: пріоритет дотичної</p>
     </div>
-    <div class="status"><i></i> WebGL · Indexed triangles</div>
+    <div class="status"><i></i> WebGL · Texture mapping</div>
   </header>
   <main class="workspace">
     <aside class="panel">
+      <section>
+        <div class="section-heading"><h2>Матеріал поверхні</h2><span id="texture-status">Завантаження…</span></div>
+        <div class="texture-maps">
+          <label><img src="textures/diffuse.png" alt="Кольорова diffuse-карта бірюзових панелей"><span><input id="useDiffuseMap" type="checkbox" checked>Diffuse</span></label>
+          <label><img src="textures/specular.png" alt="Сіра specular-карта сили відблиску"><span><input id="useSpecularMap" type="checkbox" checked>Specular</span></label>
+          <label><img src="textures/normal.png" alt="RGB normal-карта рельєфу"><span><input id="useNormalMap" type="checkbox" checked>Normal</span></label>
+        </div>
+        <p class="material-caption">Бірюзова глазур · мідна облямівка</p>
+        <label class="preset-label" for="textureView">Перегляд матеріалу</label>
+        <select id="textureView">
+          <option value="0">Освітлений матеріал · усі карти</option>
+          <option value="1">Diffuse · колір без освітлення</option>
+          <option value="2">Specular · сила відблиску</option>
+          <option value="3">Normal · нормалі у просторі текстури</option>
+        </select>
+        <label class="range-label" for="normalStrength">Сила рельєфу <output id="normalStrength-value">1</output></label>
+        <input id="normalStrength" type="range" min="0" max="3" step="0.1" value="1">
+        <div class="repeat-controls">
+          <div><label class="range-label" for="repeatU">Повтори u <output id="repeatU-value">2</output></label><input id="repeatU" type="range" min="1" max="6" step="1" value="2"></div>
+          <div><label class="range-label" for="repeatV">Повтори v <output id="repeatV-value">1</output></label><input id="repeatV" type="range" min="1" max="6" step="1" value="1"></div>
+        </div>
+      </section>
       <section>
         <h2>Сітка поверхні</h2>
         <label class="range-label" for="uSegments">Кроків за u <output id="uSegments-value">96</output></label>
@@ -30,13 +53,13 @@
         <input id="vSegments" type="range" min="2" max="80" step="1" value="20">
         <label class="preset-label" for="renderMode">Відображення</label>
         <select id="renderMode">
-          <option value="shaded">Поверхня · Phong</option>
+          <option value="shaded">Текстурована поверхня</option>
           <option value="overlay">Поверхня та сітка U/V</option>
           <option value="wireframe">Каркас U/V</option>
         </select>
       </section>
       <section>
-        <h2>Освітлення</h2>
+        <details id="light-settings"><summary>Освітлення та рух світла</summary>
         <div class="components">
           <label><input id="ambient" type="checkbox" checked>Ambient</label>
           <label><input id="diffuse" type="checkbox" checked>Diffuse</label>
@@ -46,11 +69,12 @@
         <input id="shininess" type="range" min="4" max="128" step="1" value="40">
         <label class="range-label" for="lightSpeed">Швидкість світла <output id="lightSpeed-value">25°/с</output></label>
         <input id="lightSpeed" type="range" min="0" max="90" step="1" value="25">
-        <label class="range-label" for="lightAngle">Положення світла <output id="lightAngle-value">45°</output></label>
-        <input id="lightAngle" type="range" min="0" max="360" step="1" value="45">
+        <label class="range-label" for="lightAngle">Положення світла <output id="lightAngle-value">315°</output></label>
+        <input id="lightAngle" type="range" min="0" max="360" step="1" value="315">
         <label class="check"><input id="animateLight" type="checkbox" checked>Обертати джерело світла</label>
         <label class="check"><input id="showLight" type="checkbox" checked>Показати джерело та орбіту</label>
         <label class="check"><input id="showAxes" type="checkbox" checked>Осі координат</label>
+        </details>
       </section>
       <section>
         <details id="surface-settings">
@@ -73,18 +97,18 @@
       </section>
       <div class="buttons"><button id="reset" type="button">Скинути вигляд</button><button id="screenshot" class="primary" type="button">Знімок PNG</button></div>
     </aside>
-    <section class="viewer" aria-label="Тривимірна модель з освітленням">
-      <div class="viewer-top"><span>PHONG / AREA WEIGHTED NORMALS</span><span id="parameter-label">a = 1 · b = 2 · n = 2</span></div>
-      <div class="canvas-wrap" id="canvas-holder"><canvas id="webglcanvas" aria-label="Освітлена поверхня. Перетягуйте мишею для обертання."></canvas></div>
+    <section class="viewer" aria-label="Тривимірна текстурована модель">
+      <div class="viewer-top"><span>DIFFUSE / SPECULAR / NORMAL</span><span id="parameter-label">a = 1 · b = 2 · n = 2</span></div>
+      <div class="canvas-wrap" id="canvas-holder"><canvas id="webglcanvas" aria-label="Текстурована поверхня. Перетягуйте мишею для обертання."></canvas></div>
       <div class="viewer-bottom"><span>Перетягування — обертання · Коліщатко — масштаб</span><span><i class="dot v"></i> Точкове світло · кругова орбіта</span></div>
       <div class="stats">
-        <div><span>Спільні вершини</span><strong id="vertex-count">—</strong></div>
+        <div><span>Вершини · UV-шов</span><strong id="vertex-count">—</strong></div>
         <div><span>Трикутники</span><strong id="triangle-count">—</strong></div>
         <div><span>Індекси · Uint16</span><strong id="index-count">—</strong></div>
-        <div><span>Затінення</span><strong>Phong</strong></div>
+        <div><span>Gram–Schmidt</span><strong>Пріоритет T</strong></div>
       </div>
     </section>
   </main>
-  <footer class="formulas"><span class="formula-label">ОСВІТЛЕННЯ / ВАРІАНТ 13</span><code>Irgb = Ambient + Diffuse + Specular</code><code>N = normalize(Σ (2 · Area · Nfacet))</code></footer>
+  <footer class="formulas"><span class="formula-label">ТЕКСТУРУВАННЯ / ВАРІАНТ 13</span><code>N′ = normalize(N − T · dot(N, T))</code><code>Npixel = normalize(TBN · (2 · normalMap − 1))</code></footer>
 </body>
 </html>

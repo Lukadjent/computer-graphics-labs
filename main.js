@@ -2,7 +2,8 @@
 
 // Каркас PA1: ShaderProgram, m4 та TrackballRotator.
 let gl, surface, shProgram, spaceball, canvas, helpersBuffer;
-let sceneRadius = 5, zoom = 1, lightAngle = Math.PI / 4, previousTime;
+const materialTextures = [];
+let sceneRadius = 5, zoom = 1.3, lightAngle = 7 * Math.PI / 4, previousTime;
 const byId = id => document.getElementById(id);
 
 class ShaderProgram {
@@ -10,11 +11,42 @@ class ShaderProgram {
         this.prog = program;
         this.iAttribVertex = gl.getAttribLocation(program, 'vertex');
         this.iAttribNormal = gl.getAttribLocation(program, 'normal');
+        this.iAttribTangent = gl.getAttribLocation(program, 'tangent');
+        this.iAttribTexCoord = gl.getAttribLocation(program, 'texCoord');
         for (const name of ['color', 'ModelViewProjectionMatrix', 'ModelViewMatrix',
-            'NormalMatrix', 'LightPositionEye', 'Lighting', 'Components', 'Shininess'])
+            'NormalMatrix', 'LightPositionEye', 'Lighting', 'Components', 'Shininess',
+            'DiffuseMap', 'SpecularMap', 'NormalMap', 'UseTextures', 'TextureRepeat', 'NormalStrength', 'DisplayMode'])
             this[name] = gl.getUniformLocation(program, name);
     }
     Use() { gl.useProgram(this.prog); }
+}
+
+async function loadMaterialTextures() {
+    const names = ['diffuse', 'specular', 'normal'];
+    // Окремий sampler і texture unit для кожної з трьох карт.
+    await Promise.all(names.map(async (name, unit) => {
+        const image = new Image();
+        await new Promise((resolve, reject) => {
+            image.onload = resolve;
+            image.onerror = () => reject(new Error('Не вдалося завантажити карту ' + name));
+            image.src = MATERIAL_TEXTURES[name];
+        });
+        const texture = gl.createTexture();
+        materialTextures[unit] = texture;
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        // Рядок 0 PNG відповідає v=0; normal map має +Y уздовж +v.
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
+        // 512 — степінь двійки: WebGL 1 підтримує REPEAT та mipmaps.
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.generateMipmap(gl.TEXTURE_2D);
+    }));
+    byId('texture-status').textContent = '3 карти · 512 × 512';
 }
 
 function createProgram(gl, vertexSource, fragmentSource) {
@@ -53,7 +85,7 @@ function updateStats() {
 }
 
 function resetView() {
-    zoom = 1;
+    zoom = 1.3;
     spaceball.setView(0, [7, -9, 6], [0, 0, 1]);
     draw();
 }
@@ -74,6 +106,10 @@ function drawHelpers() {
     gl.enableVertexAttribArray(shProgram.iAttribVertex);
     gl.disableVertexAttribArray(shProgram.iAttribNormal);
     gl.vertexAttrib3f(shProgram.iAttribNormal, 0, 0, 1);
+    gl.disableVertexAttribArray(shProgram.iAttribTangent);
+    gl.vertexAttrib3f(shProgram.iAttribTangent, 1, 0, 0);
+    gl.disableVertexAttribArray(shProgram.iAttribTexCoord);
+    gl.vertexAttrib2f(shProgram.iAttribTexCoord, 0, 0);
     gl.uniform1i(shProgram.Lighting, 0);
     if (byId('showAxes').checked) {
         [[0.7,0.3,0.3,1], [0.3,0.65,0.5,1], [0.4,0.55,0.85,1]].forEach((color, i) => {
@@ -116,10 +152,18 @@ function draw() {
     gl.uniform3fv(shProgram.LightPositionEye, m4.transformPoint(modelView, getLightPosition()));
     gl.uniform3fv(shProgram.Components, ['ambient', 'diffuse', 'specular'].map(id => Number(byId(id).checked)));
     gl.uniform1f(shProgram.Shininess, byId('shininess').valueAsNumber);
+    gl.uniform3fv(shProgram.UseTextures, ['useDiffuseMap', 'useSpecularMap', 'useNormalMap'].map(id => Number(byId(id).checked)));
+    gl.uniform2f(shProgram.TextureRepeat, byId('repeatU').valueAsNumber, byId('repeatV').valueAsNumber);
+    gl.uniform1f(shProgram.NormalStrength, byId('normalStrength').valueAsNumber);
+    gl.uniform1i(shProgram.DisplayMode, Number(byId('textureView').value));
+    materialTextures.forEach((texture, unit) => {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+    });
     const mode = byId('renderMode').value;
     if (mode !== 'wireframe') {
         gl.uniform1i(shProgram.Lighting, 1);
-        gl.uniform4fv(shProgram.color, [0.28, 0.73, 0.8, 1]);
+        gl.uniform4fv(shProgram.color, [0.6, 0.67, 0.69, 1]);
         if (mode === 'overlay') {
             gl.enable(gl.POLYGON_OFFSET_FILL);
             gl.polygonOffset(1, 1);
@@ -171,7 +215,7 @@ function saveScreenshot() {
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.href = url;
-        link.download = 'PA2_variant13_surface.png';
+        link.download = 'PA3_variant13_surface.png';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, 'image/png');
@@ -189,12 +233,16 @@ function animate(time) {
     requestAnimationFrame(animate);
 }
 
-function init() {
+async function init() {
     try {
         canvas = byId('webglcanvas');
         gl = canvas.getContext('webgl', { antialias: true, preserveDrawingBuffer: true });
         if (!gl) throw new Error('WebGL недоступний. Відкрийте сторінку в браузері з підтримкою WebGL.');
         shProgram = new ShaderProgram(createProgram(gl, vertexShaderSource, fragmentShaderSource));
+        shProgram.Use();
+        for (const [unit, name] of ['DiffuseMap', 'SpecularMap', 'NormalMap'].entries())
+            gl.uniform1i(shProgram[name], unit);
+        await loadMaterialTextures();
         surface = new Model(gl);
         helpersBuffer = gl.createBuffer();
         gl.enable(gl.DEPTH_TEST);
@@ -205,7 +253,9 @@ function init() {
         for (const key of Object.keys(SURFACE_DEFAULTS)) byId(key).addEventListener('input', rebuildSurface);
         for (const id of ['ambient', 'diffuse', 'specular', 'showAxes', 'showLight', 'renderMode', 'animateLight'])
             byId(id).addEventListener('change', draw);
-        for (const id of ['shininess', 'lightSpeed']) byId(id).addEventListener('input', () => {
+        for (const id of ['useDiffuseMap', 'useSpecularMap', 'useNormalMap', 'textureView'])
+            byId(id).addEventListener('change', draw);
+        for (const id of ['shininess', 'lightSpeed', 'normalStrength', 'repeatU', 'repeatV']) byId(id).addEventListener('input', () => {
             byId(id + '-value').value = byId(id).value + (id === 'lightSpeed' ? '°/с' : '');
             draw();
         });
