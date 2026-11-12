@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PA1 · Варіант 13 · Ruled Rotor Cylinder</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="Utils/m4.js"></script>
+  <script defer src="Utils/trackball-rotator.js"></script>
+  <script defer src="shader.gpu"></script>
+  <script defer src="Model.js"></script>
+  <script defer src="main.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div><p class="eyebrow">КОМП’ЮТЕРНА ГРАФІКА / ПРАКТИЧНА РОБОТА 01</p>
+      <h1>Ruled Rotor Cylinder<span>Варіант 13</span></h1>
+      <p class="subtitle">Лінійчаста поверхня · у методичці: Ruled Rotor Cylindroid</p>
+    </div>
+    <div class="status"><i></i> WebGL · LINE_STRIP</div>
+  </header>
+
+  <main class="workspace">
+    <aside class="panel">
+      <section>
+        <h2>Параметри поверхні</h2>
+        <label class="preset-label" for="preset">Приклад із методички</label>
+        <select id="preset">
+          <option value="rotor2">Рис. 2 · a = 1, b = 2, n = 2</option>
+          <option value="rotor1">Рис. 1 · a = 2, b = 2, n = 1</option>
+          <option value="rotor5">Рис. 3 · a = 2, b = 1.5, n = 5</option>
+        </select>
+        <div class="field"><label for="a">a <span>зміщення</span></label><input id="a" type="number" min="0" max="5" step="0.1" value="1" required></div>
+        <div class="field"><label for="b">b <span>амплітуда</span></label><input id="b" type="number" min="0.1" max="5" step="0.1" value="2" required></div>
+        <div class="field"><label for="n">n <span>частота, ціле число</span></label><input id="n" type="number" min="1" max="8" step="1" value="2" required></div>
+        <div class="two-fields">
+          <label>v min<input id="vMin" type="number" min="-6" max="6" step="0.1" value="-1.5" required></label>
+          <label>v max<input id="vMax" type="number" min="-6" max="6" step="0.1" value="1.5" required></label>
+        </div>
+        <div class="field"><label for="uSegments">Кроків за u</label><input id="uSegments" type="number" min="16" max="256" step="1" value="96" required></div>
+        <div class="field"><label for="vSegments">Кроків за v</label><input id="vSegments" type="number" min="2" max="80" step="1" value="20" required></div>
+        <p id="input-error" class="error" role="alert" hidden></p>
+      </section>
+      <section>
+        <h2>Дві сім’ї ліній</h2>
+        <label class="check"><input id="showU" type="checkbox" checked><span class="swatch u"></span><b>U</b><span>v = const, змінюється u</span></label>
+        <label class="check"><input id="showV" type="checkbox" checked><span class="swatch v"></span><b>V</b><span>u = const, змінюється v</span></label>
+        <label class="check"><input id="showAxes" type="checkbox" checked>Осі координат</label>
+      </section>
+      <div class="buttons"><button id="reset" type="button">Скинути вигляд</button><button id="screenshot" class="primary" type="button">Знімок PNG</button></div>
+      <p class="source">Encyclopedia of Analytical Surfaces<br>Розділ Ruled Surfaces, с. 80</p>
+    </aside>
+
+    <section class="viewer" aria-label="Тривимірна модель поверхні">
+      <div class="viewer-top"><span>ПАРАМЕТРИЧНА ПОВЕРХНЯ</span><span id="parameter-label">a = 1 · b = 2 · n = 2</span></div>
+      <div class="canvas-wrap" id="canvas-holder"><canvas id="webglcanvas" aria-label="Каркас поверхні. Перетягуйте мишею для обертання."></canvas></div>
+      <div class="viewer-bottom"><span>Перетягування — обертання · Коліщатко — масштаб</span><span><i class="dot u"></i> U-криві <i class="dot v"></i> V-прямі</span></div>
+      <div class="stats"><div><span>U-полілінії</span><strong id="u-count">—</strong></div><div><span>V-полілінії</span><strong id="v-count">—</strong></div><div><span>Вершини в буферах</span><strong id="vertex-count">—</strong></div><div><span>Область параметра u</span><strong>0 … 2π</strong></div></div>
+    </section>
+  </main>
+  <footer class="formulas"><span class="formula-label">ФОРМУЛИ / с. 80</span><code>x = (a + b sin(nu)) cos(u) − v sin(u)</code><code>y = (a + b sin(nu)) sin(u) + v cos(u)</code><code>z = b cos(nu)</code></footer>
+</body>
+</html>

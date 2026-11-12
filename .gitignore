@@ -1,0 +1,8 @@
+tmp/
+node_modules/
+assignment*.html
+assignment*.txt
+assignment*.json
+encyclopedia.txt
+output/PA1_variant13.zip
+output/verification.json
