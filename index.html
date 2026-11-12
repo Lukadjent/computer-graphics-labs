@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PA3 · Варіант 13 · Texturing</title>
+  <title>CGW · Варіант 13 · Масштабування текстури</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="styles.css">
   <script defer src="Utils/m4.js"></script>
@@ -15,15 +15,36 @@
 </head>
 <body>
   <header class="header">
-    <div><p class="eyebrow">КОМП’ЮТЕРНА ГРАФІКА / ПРАКТИЧНА РОБОТА 03</p>
+    <div><p class="eyebrow">КОМП’ЮТЕРНА ГРАФІКА / РОЗРАХУНКОВО-ГРАФІЧНА РОБОТА</p>
       <h1>Ruled Rotor Cylinder<span>Варіант 13</span></h1>
-      <p class="subtitle">Diffuse + Specular + Normal mapping · Gram–Schmidt: пріоритет дотичної</p>
+      <p class="subtitle">Масштабування текстури навколо опорної точки · Переміщення у просторі u / v</p>
     </div>
-    <div class="status"><i></i> WebGL · Texture mapping</div>
+    <div class="status"><i></i> WebGL · CGW</div>
   </header>
   <main class="workspace">
     <aside class="panel">
+      <section class="transform-panel">
+        <div class="section-heading"><h2>Масштабування UV</h2><span>Варіант 13 · непарний</span></div>
+        <label class="range-label" for="scaleU">Масштаб координат s <output id="scaleU-value">1.00</output></label>
+        <input id="scaleU" type="range" min="0.25" max="4" step="0.05" value="1">
+        <label class="range-label" for="scaleV">Масштаб координат t <output id="scaleV-value">1.00</output></label>
+        <input id="scaleV" type="range" min="0.25" max="4" step="0.05" value="1">
+        <label class="check"><input id="lockScale" type="checkbox" checked>Однаковий масштаб s / t</label>
+        <p class="hint">Більший коефіцієнт — дрібніший візерунок. 1.00 — початковий розмір.</p>
+        <canvas id="uv-preview" width="472" height="288" tabindex="0" aria-label="Опорна точка у просторі параметрів. Клацніть для вибору або використовуйте WASD."></canvas>
+        <div class="two-fields pivot-fields">
+          <label for="pivotU">Опорна s<input id="pivotU" type="number" min="0" max="1" step="any" value="0.25" required></label>
+          <label for="pivotV">Опорна t<input id="pivotV" type="number" min="0" max="1" step="any" value="0.50" required></label>
+        </div>
+        <p id="pivot-parameters" class="hint">u = 1.571 · v = 0.000</p>
+        <p class="keyboard-help"><kbd>A</kbd><kbd>D</kbd> уздовж u <span>·</span> <kbd>W</kbd><kbd>S</kbd> уздовж v</p>
+        <p class="hint">Крок 0.02 · Shift — 0.10 · клацніть модель перед WASD</p>
+        <label class="check"><input id="showPivot" type="checkbox" checked>Опорна точка поверх моделі</label>
+        <button id="resetTexture" type="button" class="wide-button">Скинути масштаб і точку</button>
+        <p id="transform-error" class="error" role="alert" hidden></p>
+      </section>
       <section>
+        <details id="material-settings"><summary>Матеріал і карти з PA3</summary>
         <div class="section-heading"><h2>Матеріал поверхні</h2><span id="texture-status">Завантаження…</span></div>
         <div class="texture-maps">
           <label><img src="textures/diffuse.png" alt="Кольорова diffuse-карта бірюзових панелей"><span><input id="useDiffuseMap" type="checkbox" checked>Diffuse</span></label>
@@ -44,8 +65,10 @@
           <div><label class="range-label" for="repeatU">Повтори u <output id="repeatU-value">2</output></label><input id="repeatU" type="range" min="1" max="6" step="1" value="2"></div>
           <div><label class="range-label" for="repeatV">Повтори v <output id="repeatV-value">1</output></label><input id="repeatV" type="range" min="1" max="6" step="1" value="1"></div>
         </div>
+        </details>
       </section>
       <section>
+        <details id="mesh-settings"><summary>Сітка поверхні</summary>
         <h2>Сітка поверхні</h2>
         <label class="range-label" for="uSegments">Кроків за u <output id="uSegments-value">96</output></label>
         <input id="uSegments" type="range" min="16" max="256" step="1" value="96">
@@ -57,6 +80,7 @@
           <option value="overlay">Поверхня та сітка U/V</option>
           <option value="wireframe">Каркас U/V</option>
         </select>
+        </details>
       </section>
       <section>
         <details id="light-settings"><summary>Освітлення та рух світла</summary>
@@ -72,7 +96,7 @@
         <label class="range-label" for="lightAngle">Положення світла <output id="lightAngle-value">315°</output></label>
         <input id="lightAngle" type="range" min="0" max="360" step="1" value="315">
         <label class="check"><input id="animateLight" type="checkbox" checked>Обертати джерело світла</label>
-        <label class="check"><input id="showLight" type="checkbox" checked>Показати джерело та орбіту</label>
+        <label class="check"><input id="showLight" type="checkbox">Показати джерело та орбіту</label>
         <label class="check"><input id="showAxes" type="checkbox" checked>Осі координат</label>
         </details>
       </section>
@@ -98,17 +122,17 @@
       <div class="buttons"><button id="reset" type="button">Скинути вигляд</button><button id="screenshot" class="primary" type="button">Знімок PNG</button></div>
     </aside>
     <section class="viewer" aria-label="Тривимірна текстурована модель">
-      <div class="viewer-top"><span>DIFFUSE / SPECULAR / NORMAL</span><span id="parameter-label">a = 1 · b = 2 · n = 2</span></div>
-      <div class="canvas-wrap" id="canvas-holder"><canvas id="webglcanvas" aria-label="Текстурована поверхня. Перетягуйте мишею для обертання."></canvas></div>
-      <div class="viewer-bottom"><span>Перетягування — обертання · Коліщатко — масштаб</span><span><i class="dot v"></i> Точкове світло · кругова орбіта</span></div>
+      <div class="viewer-top"><span>UV SCALING / FIXED PIVOT</span><span id="parameter-label">a = 1 · b = 2 · n = 2</span></div>
+      <div class="canvas-wrap" id="canvas-holder"><canvas id="webglcanvas" tabindex="0" aria-label="Текстурована поверхня. WASD переміщує опорну точку, перетягування обертає модель."></canvas></div>
+      <div class="viewer-bottom"><span>Миша — обертання · Коліщатко — масштаб моделі</span><span><i class="dot v"></i> WASD — опорна точка текстури</span></div>
       <div class="stats">
         <div><span>Вершини · UV-шов</span><strong id="vertex-count">—</strong></div>
         <div><span>Трикутники</span><strong id="triangle-count">—</strong></div>
         <div><span>Індекси · Uint16</span><strong id="index-count">—</strong></div>
-        <div><span>Gram–Schmidt</span><strong>Пріоритет T</strong></div>
+        <div><span>Масштаб UV</span><strong id="scale-label">1.00 × 1.00</strong></div>
       </div>
     </section>
   </main>
-  <footer class="formulas"><span class="formula-label">ТЕКСТУРУВАННЯ / ВАРІАНТ 13</span><code>N′ = normalize(N − T · dot(N, T))</code><code>Npixel = normalize(TBN · (2 · normalMap − 1))</code></footer>
+  <footer class="formulas"><span class="formula-label">CGW / ВАРІАНТ 13</span><code>UV′ = c + S · (UV − c)</code><code>st = UV′ · repeat</code><a href="docs/CGW_variant13_report.pdf">Звіт PDF · 10 сторінок</a></footer>
 </body>
 </html>

@@ -5,6 +5,104 @@ let gl, surface, shProgram, spaceball, canvas, helpersBuffer;
 const materialTextures = [];
 let sceneRadius = 5, zoom = 1.3, lightAngle = 7 * Math.PI / 4, previousTime;
 const byId = id => document.getElementById(id);
+const textureTransform = { pivot: [0.25, 0.5], scale: [1, 1] };
+
+// Опорна точка в нормованій області поверхні; s періодична, t обмежена.
+function setTexturePivot(s, t) {
+    textureTransform.pivot = [((s % 1) + 1) % 1, Math.max(0, Math.min(1, t))];
+    byId('transform-error').hidden = true;
+    syncTextureControls();
+    draw();
+}
+
+function syncTextureControls() {
+    const [s, t] = textureTransform.pivot;
+    byId('pivotU').value = Number(s.toFixed(4));
+    byId('pivotV').value = Number(t.toFixed(4));
+    textureTransform.scale.forEach((value, axis) => {
+        const id = axis === 0 ? 'scaleU' : 'scaleV';
+        byId(id).value = value;
+        byId(id + '-value').value = value.toFixed(2);
+    });
+    byId('scale-label').textContent = textureTransform.scale.map(x => x.toFixed(2)).join(' × ');
+    const p = surface.parameters;
+    byId('pivot-parameters').textContent = 'u = ' + (s * 2 * Math.PI).toFixed(3) +
+        ' · v = ' + (p.vMin + t * (p.vMax - p.vMin)).toFixed(3);
+    drawUVPreview();
+}
+
+function drawUVPreview() {
+    const preview = byId('uv-preview'), ctx = preview.getContext('2d');
+    const w = preview.width, h = preview.height, left = 48, right = w - 24, top = 28, bottom = h - 42;
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '20px Segoe UI';
+    ctx.textAlign = 'left'; ctx.fillStyle = '#6d8290'; ctx.fillText('t / v', 8, 24);
+    ctx.fillText('s / u', w - 62, h - 10);
+    ctx.strokeStyle = '#d6e1e7'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const x = left + (right - left) * i / 4, y = top + (bottom - top) * i / 4;
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    }
+    ctx.fillText('0', 22, bottom + 6); ctx.fillText('1', 22, top + 6);
+    ctx.fillText('0', left - 4, h - 10); ctx.fillText('1', right - 10, h - 10);
+    const x = left + textureTransform.pivot[0] * (right - left);
+    const y = bottom - textureTransform.pivot[1] * (bottom - top);
+    ctx.strokeStyle = '#b08b2a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, 2 * Math.PI); ctx.fillStyle = '#ffd05b'; ctx.fill(); ctx.stroke();
+}
+
+function initTextureControls() {
+    for (const [axis, id] of ['scaleU', 'scaleV'].entries()) byId(id).addEventListener('input', () => {
+        const value = byId(id).valueAsNumber;
+        textureTransform.scale[axis] = value;
+        if (byId('lockScale').checked) textureTransform.scale[1 - axis] = value;
+        syncTextureControls(); draw();
+    });
+    byId('lockScale').addEventListener('change', () => {
+        if (byId('lockScale').checked) textureTransform.scale[1] = textureTransform.scale[0];
+        syncTextureControls(); draw();
+    });
+    for (const id of ['pivotU', 'pivotV']) byId(id).addEventListener('input', () => {
+        const fields = ['pivotU', 'pivotV'].map(byId);
+        if (fields.some(field => !field.checkValidity() || !Number.isFinite(field.valueAsNumber))) {
+            byId('transform-error').textContent = 'Координати опорної точки мають бути від 0 до 1.';
+            byId('transform-error').hidden = false;
+            return;
+        }
+        byId('transform-error').hidden = true;
+        setTexturePivot(fields[0].valueAsNumber, fields[1].valueAsNumber);
+    });
+    byId('resetTexture').addEventListener('click', () => {
+        textureTransform.scale = [1, 1];
+        byId('lockScale').checked = true;
+        byId('transform-error').hidden = true;
+        setTexturePivot(0.25, 0.5);
+    });
+    byId('showPivot').addEventListener('change', draw);
+    const preview = byId('uv-preview');
+    preview.addEventListener('pointerdown', event => {
+        preview.focus();
+        const box = preview.getBoundingClientRect();
+        const x = (event.clientX - box.left) * preview.width / box.width;
+        const y = (event.clientY - box.top) * preview.height / box.height;
+        setTexturePivot(Math.max(0, Math.min(1, (x - 48) / (preview.width - 72))),
+            (preview.height - 42 - y) / (preview.height - 70));
+    });
+    canvas.addEventListener('pointerdown', () => canvas.focus());
+    window.addEventListener('keydown', event => {
+        if (event.ctrlKey || event.altKey || event.metaKey || event.target.isContentEditable ||
+            /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
+        const direction = { KeyA: [-1, 0], KeyD: [1, 0], KeyW: [0, 1], KeyS: [0, -1] }[event.code];
+        if (!direction) return;
+        event.preventDefault();
+        const step = event.shiftKey ? 0.10 : 0.02;
+        const [s, t] = textureTransform.pivot;
+        setTexturePivot(s + step * direction[0], t + step * direction[1]);
+    });
+    syncTextureControls();
+}
 
 class ShaderProgram {
     constructor(program) {
@@ -15,7 +113,8 @@ class ShaderProgram {
         this.iAttribTexCoord = gl.getAttribLocation(program, 'texCoord');
         for (const name of ['color', 'ModelViewProjectionMatrix', 'ModelViewMatrix',
             'NormalMatrix', 'LightPositionEye', 'Lighting', 'Components', 'Shininess',
-            'DiffuseMap', 'SpecularMap', 'NormalMap', 'UseTextures', 'TextureRepeat', 'NormalStrength', 'DisplayMode'])
+            'DiffuseMap', 'SpecularMap', 'NormalMap', 'UseTextures', 'TextureRepeat', 'NormalStrength', 'DisplayMode',
+            'TexturePivot', 'TextureScale', 'PivotMarker'])
             this[name] = gl.getUniformLocation(program, name);
     }
     Use() { gl.useProgram(this.prog); }
@@ -82,6 +181,7 @@ function updateStats() {
     byId('parameter-label').textContent = 'a = ' + p.a + ' · b = ' + p.b + ' · n = ' + p.n;
     sceneRadius = Math.hypot(p.a + p.b, Math.max(Math.abs(p.vMin), Math.abs(p.vMax)), p.b);
     for (const id of ['uSegments', 'vSegments']) byId(id + '-value').value = p[id];
+    syncTextureControls();
 }
 
 function resetView() {
@@ -100,6 +200,8 @@ function drawHelpers() {
     const data = [0,0,0, length,0,0, 0,0,0, 0,length,0, 0,0,0, 0,0,length];
     for (let i = 0; i < 96; i++) data.push(...getLightPosition(i * 2 * Math.PI / 96));
     data.push(...getLightPosition());
+    const p = surface.parameters, [s, t] = textureTransform.pivot;
+    data.push(...surfacePoint(2 * Math.PI * s, p.vMin + t * (p.vMax - p.vMin), p));
     gl.bindBuffer(gl.ARRAY_BUFFER, helpersBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
     gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
@@ -122,6 +224,14 @@ function drawHelpers() {
         gl.drawArrays(gl.LINE_LOOP, 6, 96);
         gl.uniform4fv(shProgram.color, [1,0.85,0.44,1]);
         gl.drawArrays(gl.POINTS, 102, 1);
+    }
+    if (byId('showPivot').checked) {
+        // Маркер точної P(u,v) поверх моделі: залишається видимим і на дальньому боці.
+        gl.disable(gl.DEPTH_TEST);
+        gl.uniform1i(shProgram.PivotMarker, 1);
+        gl.drawArrays(gl.POINTS, 103, 1);
+        gl.uniform1i(shProgram.PivotMarker, 0);
+        gl.enable(gl.DEPTH_TEST);
     }
 }
 
@@ -154,6 +264,9 @@ function draw() {
     gl.uniform1f(shProgram.Shininess, byId('shininess').valueAsNumber);
     gl.uniform3fv(shProgram.UseTextures, ['useDiffuseMap', 'useSpecularMap', 'useNormalMap'].map(id => Number(byId(id).checked)));
     gl.uniform2f(shProgram.TextureRepeat, byId('repeatU').valueAsNumber, byId('repeatV').valueAsNumber);
+    gl.uniform2fv(shProgram.TexturePivot, textureTransform.pivot);
+    gl.uniform2fv(shProgram.TextureScale, textureTransform.scale);
+    gl.uniform1i(shProgram.PivotMarker, 0);
     gl.uniform1f(shProgram.NormalStrength, byId('normalStrength').valueAsNumber);
     gl.uniform1i(shProgram.DisplayMode, Number(byId('textureView').value));
     materialTextures.forEach((texture, unit) => {
@@ -215,7 +328,7 @@ function saveScreenshot() {
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.href = url;
-        link.download = 'PA3_variant13_surface.png';
+        link.download = 'CGW_variant13_surface.png';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, 'image/png');
@@ -249,6 +362,7 @@ async function init() {
         gl.depthFunc(gl.LEQUAL);
         // Без CULL_FACE: поверхня відкрита, видимі обидва боки.
         spaceball = new TrackballRotator(canvas, draw, 0, [7, -9, 6], [0, 0, 1]);
+        initTextureControls();
         updateStats();
         for (const key of Object.keys(SURFACE_DEFAULTS)) byId(key).addEventListener('input', rebuildSurface);
         for (const id of ['ambient', 'diffuse', 'specular', 'showAxes', 'showLight', 'renderMode', 'animateLight'])

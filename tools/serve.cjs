@@ -20,4 +20,4 @@ http.createServer((request, response) => {
         response.writeHead(200, { 'Content-Type': mime[path.extname(file)] || 'application/octet-stream' });
         response.end(data);
     });
-}).listen(8765, '127.0.0.1', () => console.log('PA3: http://127.0.0.1:8765'));
+}).listen(8765, '127.0.0.1', () => console.log('CGW: http://127.0.0.1:8765'));
