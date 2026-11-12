@@ -1,17 +1,18 @@
 'use strict';
 
-// Організація рендерингу базується на ademch/WebGL: ShaderProgram, m4, TrackballRotator.
-let gl, surface, shProgram, spaceball;
-let canvas, axesBuffer;
-let sceneRadius = 5, zoom = 1;
+// Каркас PA1: ShaderProgram, m4 та TrackballRotator.
+let gl, surface, shProgram, spaceball, canvas, helpersBuffer;
+let sceneRadius = 5, zoom = 1, lightAngle = Math.PI / 4, previousTime;
 const byId = id => document.getElementById(id);
 
 class ShaderProgram {
     constructor(program) {
         this.prog = program;
         this.iAttribVertex = gl.getAttribLocation(program, 'vertex');
-        this.iColor = gl.getUniformLocation(program, 'color');
-        this.iModelViewProjectionMatrix = gl.getUniformLocation(program, 'ModelViewProjectionMatrix');
+        this.iAttribNormal = gl.getAttribLocation(program, 'normal');
+        for (const name of ['color', 'ModelViewProjectionMatrix', 'ModelViewMatrix',
+            'NormalMatrix', 'LightPositionEye', 'Lighting', 'Components', 'Shininess'])
+            this[name] = gl.getUniformLocation(program, name);
     }
     Use() { gl.useProgram(this.prog); }
 }
@@ -42,41 +43,55 @@ function createProgram(gl, vertexSource, fragmentSource) {
 }
 
 function updateStats() {
-    byId('u-count').textContent = surface.uRanges.length;
-    byId('v-count').textContent = surface.vRanges.length;
-    byId('vertex-count').textContent = (surface.uVertices.length + surface.vVertices.length) / 3;
+    byId('vertex-count').textContent = surface.positions.length / 3;
+    byId('triangle-count').textContent = surface.indices.length / 3;
+    byId('index-count').textContent = surface.indices.length;
     const p = surface.parameters;
-    byId('parameter-label').textContent = `a = ${p.a} · b = ${p.b} · n = ${p.n}`;
-    // Верхня оцінка відстані до початку координат для налаштування камери.
+    byId('parameter-label').textContent = 'a = ' + p.a + ' · b = ' + p.b + ' · n = ' + p.n;
     sceneRadius = Math.hypot(p.a + p.b, Math.max(Math.abs(p.vMin), Math.abs(p.vMax)), p.b);
+    for (const id of ['uSegments', 'vSegments']) byId(id + '-value').value = p[id];
 }
 
 function resetView() {
     zoom = 1;
-    // Вісь z спрямована вгору; розглядаємо поверхню під кутом.
     spaceball.setView(0, [7, -9, 6], [0, 0, 1]);
     draw();
 }
 
-function drawAxes() {
-    const length = sceneRadius * 0.82;
-    gl.bindBuffer(gl.ARRAY_BUFFER, axesBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        0,0,0, length,0,0, 0,0,0, 0,length,0, 0,0,0, 0,0,length
-    ]), gl.DYNAMIC_DRAW);
+// Джерело рухається у світовій системі, незалежно від обертання камери.
+function getLightPosition(angle = lightAngle) {
+    return [sceneRadius * 1.35 * Math.cos(angle), sceneRadius * 1.35 * Math.sin(angle), sceneRadius * 0.45];
+}
+
+function drawHelpers() {
+    const length = sceneRadius * 0.7;
+    const data = [0,0,0, length,0,0, 0,0,0, 0,length,0, 0,0,0, 0,0,length];
+    for (let i = 0; i < 96; i++) data.push(...getLightPosition(i * 2 * Math.PI / 96));
+    data.push(...getLightPosition());
+    gl.bindBuffer(gl.ARRAY_BUFFER, helpersBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
     gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(shProgram.iAttribVertex);
-    const colors = [[0.64,0.27,0.29,1], [0.25,0.54,0.42,1], [0.30,0.44,0.66,1]];
-    colors.forEach((color, i) => {
-        gl.uniform4fv(shProgram.iColor, color);
-        gl.drawArrays(gl.LINES, i * 2, 2);
-    });
+    gl.disableVertexAttribArray(shProgram.iAttribNormal);
+    gl.vertexAttrib3f(shProgram.iAttribNormal, 0, 0, 1);
+    gl.uniform1i(shProgram.Lighting, 0);
+    if (byId('showAxes').checked) {
+        [[0.7,0.3,0.3,1], [0.3,0.65,0.5,1], [0.4,0.55,0.85,1]].forEach((color, i) => {
+            gl.uniform4fv(shProgram.color, color);
+            gl.drawArrays(gl.LINES, i * 2, 2);
+        });
+    }
+    if (byId('showLight').checked) {
+        gl.uniform4fv(shProgram.color, [0.38,0.38,0.31,1]);
+        gl.drawArrays(gl.LINE_LOOP, 6, 96);
+        gl.uniform4fv(shProgram.color, [1,0.85,0.44,1]);
+        gl.drawArrays(gl.POINTS, 102, 1);
+    }
 }
 
 function draw() {
     if (!spaceball || gl.isContextLost()) return;
-    // Розмір drawing buffer дорівнює розміру CSS: початковий TrackballRotator
-    // використовує canvas.width та CSS-координати миші в одній системі.
+    // TrackballRotator використовує CSS-координати та canvas.width.
     const width = Math.max(1, Math.round(canvas.clientWidth));
     const height = Math.max(1, Math.round(canvas.clientHeight));
     if (canvas.width !== width || canvas.height !== height) {
@@ -88,14 +103,36 @@ function draw() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     shProgram.Use();
     const aspect = width / height;
-    const halfHeight = sceneRadius * 1.12 / (zoom * Math.min(1, aspect));
+    const halfHeight = sceneRadius * 1.58 / (zoom * Math.min(1, aspect));
     const halfWidth = halfHeight * aspect;
-    const projection = m4.orthographic(-halfWidth, halfWidth, -halfHeight, halfHeight,
-        -sceneRadius * 4, sceneRadius * 4);
-    const modelViewProjection = m4.multiply(projection, spaceball.getViewMatrix());
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
-    if (byId('showAxes').checked) drawAxes();
-    surface.Draw(shProgram, byId('showU').checked, byId('showV').checked);
+    const projection = m4.orthographic(-halfWidth, halfWidth, -halfHeight, halfHeight, -sceneRadius * 5, sceneRadius * 5);
+    const modelView = spaceball.getViewMatrix();
+    const normal4 = m4.transpose(m4.inverse(modelView));
+    const normal3 = [normal4[0], normal4[1], normal4[2], normal4[4], normal4[5], normal4[6], normal4[8], normal4[9], normal4[10]];
+    gl.uniformMatrix4fv(shProgram.ModelViewMatrix, false, modelView);
+    gl.uniformMatrix4fv(shProgram.ModelViewProjectionMatrix, false, m4.multiply(projection, modelView));
+    gl.uniformMatrix3fv(shProgram.NormalMatrix, false, normal3);
+    // Точки поверхні та світло передаються в одній системі координат.
+    gl.uniform3fv(shProgram.LightPositionEye, m4.transformPoint(modelView, getLightPosition()));
+    gl.uniform3fv(shProgram.Components, ['ambient', 'diffuse', 'specular'].map(id => Number(byId(id).checked)));
+    gl.uniform1f(shProgram.Shininess, byId('shininess').valueAsNumber);
+    const mode = byId('renderMode').value;
+    if (mode !== 'wireframe') {
+        gl.uniform1i(shProgram.Lighting, 1);
+        gl.uniform4fv(shProgram.color, [0.28, 0.73, 0.8, 1]);
+        if (mode === 'overlay') {
+            gl.enable(gl.POLYGON_OFFSET_FILL);
+            gl.polygonOffset(1, 1);
+        }
+        surface.Draw(shProgram);
+        gl.disable(gl.POLYGON_OFFSET_FILL);
+    }
+    if (mode !== 'shaded') {
+        gl.uniform1i(shProgram.Lighting, 0);
+        gl.uniform4fv(shProgram.color, mode === 'overlay' ? [0.08,0.22,0.28,1] : [0.42,0.86,0.9,1]);
+        surface.Draw(shProgram, true);
+    }
+    drawHelpers();
 }
 
 function readParameters() {
@@ -134,10 +171,22 @@ function saveScreenshot() {
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.href = url;
-        link.download = 'PA1_variant13_surface.png';
+        link.download = 'PA2_variant13_surface.png';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, 'image/png');
+}
+
+function animate(time) {
+    const dt = previousTime === undefined ? 0 : Math.min((time - previousTime) / 1000, 0.1);
+    previousTime = time;
+    if (!gl.isContextLost() && byId('animateLight').checked && byId('lightSpeed').valueAsNumber > 0) {
+        lightAngle = (lightAngle + dt * byId('lightSpeed').valueAsNumber * Math.PI / 180) % (2 * Math.PI);
+        byId('lightAngle').value = lightAngle * 180 / Math.PI;
+        byId('lightAngle-value').value = Math.round(lightAngle * 180 / Math.PI) + '°';
+        draw();
+    }
+    requestAnimationFrame(animate);
 }
 
 function init() {
@@ -146,14 +195,26 @@ function init() {
         gl = canvas.getContext('webgl', { antialias: true, preserveDrawingBuffer: true });
         if (!gl) throw new Error('WebGL недоступний. Відкрийте сторінку в браузері з підтримкою WebGL.');
         shProgram = new ShaderProgram(createProgram(gl, vertexShaderSource, fragmentShaderSource));
-        surface = new Model(gl, SURFACE_DEFAULTS);
-        axesBuffer = gl.createBuffer();
+        surface = new Model(gl);
+        helpersBuffer = gl.createBuffer();
         gl.enable(gl.DEPTH_TEST);
         gl.depthFunc(gl.LEQUAL);
+        // Без CULL_FACE: поверхня відкрита, видимі обидва боки.
         spaceball = new TrackballRotator(canvas, draw, 0, [7, -9, 6], [0, 0, 1]);
         updateStats();
         for (const key of Object.keys(SURFACE_DEFAULTS)) byId(key).addEventListener('input', rebuildSurface);
-        for (const id of ['showU', 'showV', 'showAxes']) byId(id).addEventListener('change', draw);
+        for (const id of ['ambient', 'diffuse', 'specular', 'showAxes', 'showLight', 'renderMode', 'animateLight'])
+            byId(id).addEventListener('change', draw);
+        for (const id of ['shininess', 'lightSpeed']) byId(id).addEventListener('input', () => {
+            byId(id + '-value').value = byId(id).value + (id === 'lightSpeed' ? '°/с' : '');
+            draw();
+        });
+        byId('lightAngle').addEventListener('input', () => {
+            byId('animateLight').checked = false;
+            lightAngle = byId('lightAngle').valueAsNumber * Math.PI / 180;
+            byId('lightAngle-value').value = Math.round(byId('lightAngle').valueAsNumber) + '°';
+            draw();
+        });
         byId('preset').addEventListener('change', event => setPreset(event.target.value));
         byId('reset').addEventListener('click', resetView);
         byId('screenshot').addEventListener('click', saveScreenshot);
@@ -169,6 +230,7 @@ function init() {
         });
         new ResizeObserver(draw).observe(byId('canvas-holder'));
         draw();
+        requestAnimationFrame(animate);
     } catch (error) {
         byId('canvas-holder').textContent = error.message;
         console.error(error);

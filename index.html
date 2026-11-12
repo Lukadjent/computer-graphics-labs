@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PA1 · Варіант 13 · Ruled Rotor Cylinder</title>
+  <title>PA2 · Варіант 13 · Phong Lighting</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="styles.css">
   <script defer src="Utils/m4.js"></script>
@@ -14,51 +14,77 @@
 </head>
 <body>
   <header class="header">
-    <div><p class="eyebrow">КОМП’ЮТЕРНА ГРАФІКА / ПРАКТИЧНА РОБОТА 01</p>
+    <div><p class="eyebrow">КОМП’ЮТЕРНА ГРАФІКА / ПРАКТИЧНА РОБОТА 02</p>
       <h1>Ruled Rotor Cylinder<span>Варіант 13</span></h1>
-      <p class="subtitle">Лінійчаста поверхня · у методичці: Ruled Rotor Cylindroid</p>
+      <p class="subtitle">Phong shading · Нормалі з вагами площ граней · Точкове джерело світла</p>
     </div>
-    <div class="status"><i></i> WebGL · LINE_STRIP</div>
+    <div class="status"><i></i> WebGL · Indexed triangles</div>
   </header>
-
   <main class="workspace">
     <aside class="panel">
       <section>
-        <h2>Параметри поверхні</h2>
-        <label class="preset-label" for="preset">Приклад із методички</label>
-        <select id="preset">
-          <option value="rotor2">Рис. 2 · a = 1, b = 2, n = 2</option>
-          <option value="rotor1">Рис. 1 · a = 2, b = 2, n = 1</option>
-          <option value="rotor5">Рис. 3 · a = 2, b = 1.5, n = 5</option>
+        <h2>Сітка поверхні</h2>
+        <label class="range-label" for="uSegments">Кроків за u <output id="uSegments-value">96</output></label>
+        <input id="uSegments" type="range" min="16" max="256" step="1" value="96">
+        <label class="range-label" for="vSegments">Кроків за v <output id="vSegments-value">20</output></label>
+        <input id="vSegments" type="range" min="2" max="80" step="1" value="20">
+        <label class="preset-label" for="renderMode">Відображення</label>
+        <select id="renderMode">
+          <option value="shaded">Поверхня · Phong</option>
+          <option value="overlay">Поверхня та сітка U/V</option>
+          <option value="wireframe">Каркас U/V</option>
         </select>
-        <div class="field"><label for="a">a <span>зміщення</span></label><input id="a" type="number" min="0" max="5" step="0.1" value="1" required></div>
-        <div class="field"><label for="b">b <span>амплітуда</span></label><input id="b" type="number" min="0.1" max="5" step="0.1" value="2" required></div>
-        <div class="field"><label for="n">n <span>частота, ціле число</span></label><input id="n" type="number" min="1" max="8" step="1" value="2" required></div>
-        <div class="two-fields">
-          <label>v min<input id="vMin" type="number" min="-6" max="6" step="0.1" value="-1.5" required></label>
-          <label>v max<input id="vMax" type="number" min="-6" max="6" step="0.1" value="1.5" required></label>
-        </div>
-        <div class="field"><label for="uSegments">Кроків за u</label><input id="uSegments" type="number" min="16" max="256" step="1" value="96" required></div>
-        <div class="field"><label for="vSegments">Кроків за v</label><input id="vSegments" type="number" min="2" max="80" step="1" value="20" required></div>
-        <p id="input-error" class="error" role="alert" hidden></p>
       </section>
       <section>
-        <h2>Дві сім’ї ліній</h2>
-        <label class="check"><input id="showU" type="checkbox" checked><span class="swatch u"></span><b>U</b><span>v = const, змінюється u</span></label>
-        <label class="check"><input id="showV" type="checkbox" checked><span class="swatch v"></span><b>V</b><span>u = const, змінюється v</span></label>
+        <h2>Освітлення</h2>
+        <div class="components">
+          <label><input id="ambient" type="checkbox" checked>Ambient</label>
+          <label><input id="diffuse" type="checkbox" checked>Diffuse</label>
+          <label><input id="specular" type="checkbox" checked>Specular</label>
+        </div>
+        <label class="range-label" for="shininess">Блиск матеріалу <output id="shininess-value">40</output></label>
+        <input id="shininess" type="range" min="4" max="128" step="1" value="40">
+        <label class="range-label" for="lightSpeed">Швидкість світла <output id="lightSpeed-value">25°/с</output></label>
+        <input id="lightSpeed" type="range" min="0" max="90" step="1" value="25">
+        <label class="range-label" for="lightAngle">Положення світла <output id="lightAngle-value">45°</output></label>
+        <input id="lightAngle" type="range" min="0" max="360" step="1" value="45">
+        <label class="check"><input id="animateLight" type="checkbox" checked>Обертати джерело світла</label>
+        <label class="check"><input id="showLight" type="checkbox" checked>Показати джерело та орбіту</label>
         <label class="check"><input id="showAxes" type="checkbox" checked>Осі координат</label>
       </section>
+      <section>
+        <details id="surface-settings">
+          <summary>Параметри поверхні з PA1</summary>
+          <label class="preset-label" for="preset">Приклад із методички</label>
+          <select id="preset">
+            <option value="rotor2">Рис. 2 · a = 1, b = 2, n = 2</option>
+            <option value="rotor1">Рис. 1 · a = 2, b = 2, n = 1</option>
+            <option value="rotor5">Рис. 3 · a = 2, b = 1.5, n = 5</option>
+          </select>
+          <div class="field"><label for="a">a <span>зміщення</span></label><input id="a" type="number" min="0" max="5" step="0.1" value="1" required></div>
+          <div class="field"><label for="b">b <span>амплітуда</span></label><input id="b" type="number" min="0.1" max="5" step="0.1" value="2" required></div>
+          <div class="field"><label for="n">n <span>частота, ціле число</span></label><input id="n" type="number" min="1" max="8" step="1" value="2" required></div>
+          <div class="two-fields">
+            <label>v min<input id="vMin" type="number" min="-6" max="6" step="0.1" value="-1.5" required></label>
+            <label>v max<input id="vMax" type="number" min="-6" max="6" step="0.1" value="1.5" required></label>
+          </div>
+        </details>
+        <p id="input-error" class="error" role="alert" hidden></p>
+      </section>
       <div class="buttons"><button id="reset" type="button">Скинути вигляд</button><button id="screenshot" class="primary" type="button">Знімок PNG</button></div>
-      <p class="source">Encyclopedia of Analytical Surfaces<br>Розділ Ruled Surfaces, с. 80</p>
     </aside>
-
-    <section class="viewer" aria-label="Тривимірна модель поверхні">
-      <div class="viewer-top"><span>ПАРАМЕТРИЧНА ПОВЕРХНЯ</span><span id="parameter-label">a = 1 · b = 2 · n = 2</span></div>
-      <div class="canvas-wrap" id="canvas-holder"><canvas id="webglcanvas" aria-label="Каркас поверхні. Перетягуйте мишею для обертання."></canvas></div>
-      <div class="viewer-bottom"><span>Перетягування — обертання · Коліщатко — масштаб</span><span><i class="dot u"></i> U-криві <i class="dot v"></i> V-прямі</span></div>
-      <div class="stats"><div><span>U-полілінії</span><strong id="u-count">—</strong></div><div><span>V-полілінії</span><strong id="v-count">—</strong></div><div><span>Вершини в буферах</span><strong id="vertex-count">—</strong></div><div><span>Область параметра u</span><strong>0 … 2π</strong></div></div>
+    <section class="viewer" aria-label="Тривимірна модель з освітленням">
+      <div class="viewer-top"><span>PHONG / AREA WEIGHTED NORMALS</span><span id="parameter-label">a = 1 · b = 2 · n = 2</span></div>
+      <div class="canvas-wrap" id="canvas-holder"><canvas id="webglcanvas" aria-label="Освітлена поверхня. Перетягуйте мишею для обертання."></canvas></div>
+      <div class="viewer-bottom"><span>Перетягування — обертання · Коліщатко — масштаб</span><span><i class="dot v"></i> Точкове світло · кругова орбіта</span></div>
+      <div class="stats">
+        <div><span>Спільні вершини</span><strong id="vertex-count">—</strong></div>
+        <div><span>Трикутники</span><strong id="triangle-count">—</strong></div>
+        <div><span>Індекси · Uint16</span><strong id="index-count">—</strong></div>
+        <div><span>Затінення</span><strong>Phong</strong></div>
+      </div>
     </section>
   </main>
-  <footer class="formulas"><span class="formula-label">ФОРМУЛИ / с. 80</span><code>x = (a + b sin(nu)) cos(u) − v sin(u)</code><code>y = (a + b sin(nu)) sin(u) + v cos(u)</code><code>z = b cos(nu)</code></footer>
+  <footer class="formulas"><span class="formula-label">ОСВІТЛЕННЯ / ВАРІАНТ 13</span><code>Irgb = Ambient + Diffuse + Specular</code><code>N = normalize(Σ (2 · Area · Nfacet))</code></footer>
 </body>
 </html>
