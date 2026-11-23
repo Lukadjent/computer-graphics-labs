@@ -158,8 +158,8 @@ story.append(Paragraph('Масштабування текстури<br/>навк
 story.append(Spacer(1, 15))
 story.append(Paragraph('Варіант 13', cover))
 story.append(Spacer(1, 100))
-for line in ['Виконавець __________________________________',
-             'Група _______________________________________',
+for line in ['Виконавець Лисенко Лука',
+             'Група ТР-61МП',
              'Викладач Демчішин Анатолій Анатолійович']:
     story.append(Paragraph(line, ParagraphStyle('Author', parent=cover, alignment=TA_LEFT, leftIndent=104, spaceAfter=12)))
 story.append(Spacer(1, 80))
